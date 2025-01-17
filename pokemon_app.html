@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pokémon App</title>
+  <style>
+    /* CSS Styling */
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f3f4f6;
+      color: #333;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 20px auto;
+      padding: 20px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+
+    h1, h2 {
+      text-align: center;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    input, select, button {
+      padding: 8px 12px;
+      font-size: 16px;
+    }
+
+    .pokemon-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 10px;
+    }
+
+    .pokemon-card {
+      text-align: center;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background-color: #fafafa;
+      cursor: pointer;
+    }
+
+    .pokemon-card img {
+      max-width: 100px;
+    }
+
+    .pokemon-details {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    button {
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+
+    button:disabled {
+      background-color: #aaa;
+    }
+
+    button:hover:not(:disabled) {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Pokémon App</h1>
+    <div class="controls">
+      <input type="text" id="searchInput" placeholder="Search Pokémon Name">
+      <select id="typeFilter">
+        <option value="">Filter by Type</option>
+        <option value="grass">Grass</option>
+        <option value="fire">Fire</option>
+        <option value="water">Water</option>
+        <option value="electric">Electric</option>
+        <option value="bug">Bug</option>
+        <option value="normal">Normal</option>
+      </select>
+      <button id="sortAsc">Sort A-Z</button>
+      <button id="sortDesc">Sort Z-A</button>
+    </div>
+    <div id="pokemonList" class="pokemon-list"></div>
+    <div class="pagination">
+      <button id="prevPage" disabled>Previous</button>
+      <button id="nextPage">Next</button>
+    </div>
+    <div id="pokemonDetails" class="pokemon-details" style="display: none;"></div>
+    <h2 id="similarHeader" style="display: none;">Similar Pokémon</h2>
+    <div id="similarPokemon" class="pokemon-list" style="display: none;"></div>
+  </div>
+  <script>
+    // JavaScript Logic
+    const API_URL = 'https://pokeapi.co/api/v2/';
+    let currentPage = 1;
+    let allPokemon = [];
+
+    // Fetch Pokémon data for the Home Page
+    async function fetchPokemonList(page = 1) {
+      const offset = (page - 1) * 10;
+      const response = await fetch(`${API_URL}pokemon?offset=${offset}&limit=10`);
+      const data = await response.json();
+
+      // Fetch detailed info for each Pokémon
+      const detailedData = await Promise.all(
+        data.results.map(async (pokemon) => {
+          const details = await fetch(pokemon.url);
+          return details.json();
+        })
+      );
+
+      allPokemon = detailedData;
+      renderPokemonList(detailedData);
+    }
+
+    // Render Pokémon List on Home Page
+    function renderPokemonList(pokemonList) {
+      const pokemonContainer = document.getElementById('pokemonList');
+      pokemonContainer.innerHTML = '';
+      pokemonList.forEach((pokemon) => {
+        const types = pokemon.types.map((t) => t.type.name).join(', ');
+        pokemonContainer.innerHTML += `
+          <div class="pokemon-card" onclick="viewPokemonDetails(${pokemon.id})">
+            <img src="${pokemon.sprites.front_default}" alt="${pokemon.name}">
+            <h3>${pokemon.name}</h3>
+            <p>Type: ${types}</p>
+          </div>
+        `;
+      });
+    }
+
+    // View Pokémon Details
+    async function viewPokemonDetails(id) {
+      const response = await fetch(`${API_URL}pokemon/${id}`);
+      const pokemon = await response.json();
+      const types = pokemon.types.map((t) => t.type.name).join(', ');
+      const detailsContainer = document.getElementById('pokemonDetails');
+      document.getElementById('pokemonList').style.display = 'none';
+      document.querySelector('.controls').style.display = 'none';
+      document.querySelector('.pagination').style.display = 'none';
+      detailsContainer.style.display = 'block';
+      detailsContainer.innerHTML = `
+        <h2>${pokemon.name}</h2>
+        <img src="${pokemon.sprites.front_default}" alt="${pokemon.name}">
+        <p>ID: ${pokemon.id}</p>
+        <p>Type: ${types}</p>
+        <p>Height: ${pokemon.height}</p>
+        <p>Weight: ${pokemon.weight}</p>
+      `;
+
+      // Fetch similar Pokémon
+      const similarHeader = document.getElementById('similarHeader');
+      const similarPokemon = document.getElementById('similarPokemon');
+      similarHeader.style.display = 'block';
+      similarPokemon.style.display = 'grid';
+      similarPokemon.innerHTML = '';
+
+      for (let type of pokemon.types) {
+        const response = await fetch(type.type.url);
+        const data = await response.json();
+        data.pokemon
+          .slice(0, 5)
+          .map((p) => p.pokemon)
+          .filter((p) => p.name !== pokemon.name)
+          .forEach(async (similar) => {
+            const res = await fetch(similar.url);
+            const simDetails = await res.json();
+            const simTypes = simDetails.types.map((t) => t.type.name).join(', ');
+            similarPokemon.innerHTML += `
+              <div class="pokemon-card">
+                <img src="${simDetails.sprites.front_default}" alt="${simDetails.name}">
+                <h3>${simDetails.name}</h3>
+                <p>Type: ${simTypes}</p>
+              </div>
+            `;
+          });
+      }
+    }
+
+    // Handle Search, Filter, and Sort
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase();
+      const filtered = allPokemon.filter((p) => p.name.includes(query));
+      renderPokemonList(filtered);
+    });
+
+    document.getElementById('typeFilter').addEventListener('change', (e) => {
+      const type = e.target.value;
+      if (type) {
+        const filtered = allPokemon.filter((p) =>
+          p.types.some((t) => t.type.name === type)
+        );
+        renderPokemonList(filtered);
+      } else {
+        renderPokemonList(allPokemon);
+      }
+    });
+
+    document.getElementById('sortAsc').addEventListener('click', () => {
+      const sorted = [...allPokemon].sort((a, b) => a.name.localeCompare(b.name));
+      renderPokemonList(sorted);
+    });
+
+    document.getElementById('sortDesc').addEventListener('click', () => {
+      const sorted = [...allPokemon].sort((a, b) => b.name.localeCompare(a.name));
+      renderPokemonList(sorted);
+    });
+
+    // Pagination
+    document.getElementById('prevPage').addEventListener('click', () => {
+      if (currentPage > 1) {
+        currentPage--;
+        fetchPokemonList(currentPage);
+        document.getElementById('nextPage').disabled = false;
+        if (currentPage === 1) {
+          document.getElementById('prevPage').disabled = true;
+        }
+      }
+    });
+
+    document.getElementById('nextPage').addEventListener('click', () => {
+      currentPage++;
+      fetchPokemonList(currentPage);
+      document.getElementById('prevPage').disabled = false;
+    });
+
+    // Initialize Home Page
+    fetchPokemonList();
+  </script>
+</body>
+</html>
