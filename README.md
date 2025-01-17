@@ -1,0 +1,2 @@
+# winning
+contain all
